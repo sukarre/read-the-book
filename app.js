@@ -565,6 +565,8 @@ function bind() {
     scrollToSentence(Number(e.target.value), 'auto');
   });
   $('settingsBtn').addEventListener('click', () => { $('settings').hidden = !$('settings').hidden; });
+  // Tapping the page closes the settings, so they never get in the way of reading.
+  $('docSection').addEventListener('pointerdown', () => { $('settings').hidden = true; });
 
   $('docText').addEventListener('click', (e) => {
     const link = e.target.closest('.figlink');

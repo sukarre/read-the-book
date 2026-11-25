@@ -183,3 +183,23 @@ button.icon.small svg { width: 22px; height: 22px; }
 @media (max-width: 899px) {
   .fig-panel { top: auto; left: 0; width: auto; height: 58vh; border-left: none; border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; z-index: 30; }
 }
+
+/* Settings: label text and its value on one line */
+.settings label { flex-direction: row; flex-wrap: wrap; align-items: baseline; column-gap: 6px; }
+.settings label > select, .settings label > input { flex: 1 0 100%; }
+
+/* Phones: compact two-column settings that never cover more than ~45% of the screen */
+@media (max-width: 600px) {
+  .settings {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 12px; margin-top: 6px; padding-top: 8px;
+    max-height: 45vh; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain;
+  }
+  .settings label { font-size: .8rem; row-gap: 2px; }
+  .settings select { min-height: 36px; padding: 5px 6px; font-size: .9rem; min-width: 0; width: 100%; }
+  .settings .voice-label { grid-column: 1 / -1; order: -1; }
+  .settings label:has(#sleepSelect) { order: 1; }
+  .settings label:has(#rate) { order: 2; }
+  .settings label:has(#pitch) { order: 3; }
+  .settings #previewBtn { order: 4; grid-column: 1 / -1; min-height: 34px; }
+  .settings .hint { order: 5; font-size: .75rem; }
+}
