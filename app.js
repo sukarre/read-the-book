@@ -612,7 +612,7 @@ async function initVoices() {
 function applySettingsUI() {
   $('rate').value = settings.rate;
   $('pitch').value = settings.pitch;
-  $('rateVal').textContent = Number(settings.rate).toFixed(2) + '×';
+  showSpeed();
   $('pitchVal').textContent = Number(settings.pitch).toFixed(2);
   $('sleepSelect').value = String(settings.sleep);
   $('autoFig').checked = !!settings.autoOpenFig;
@@ -622,6 +622,14 @@ function applySettingsUI() {
   reader.volume = settings.volume;
   reader.rate = settings.rate;
   reader.pitch = settings.pitch;
+}
+
+function showSpeed() {
+  const r = Number(settings.rate);
+  const t = r.toFixed(2) + '×';
+  $('rateVal').textContent = t;
+  $('speedBtnVal').textContent = t;
+  $('rate').style.setProperty('--fill', ((r - 0.5) / 1.5) * 100 + '%');
 }
 
 function showVolume() {
@@ -688,7 +696,15 @@ function bind() {
   });
   $('settingsBtn').addEventListener('click', () => { $('settings').hidden = !$('settings').hidden; });
   // Tapping the page closes the settings, so they never get in the way of reading.
-  $('docSection').addEventListener('pointerdown', () => { $('settings').hidden = true; $('volumeRow').classList.remove('open'); });
+  $('docSection').addEventListener('pointerdown', () => {
+    $('settings').hidden = true;
+    $('volumeRow').classList.remove('open');
+    $('speedRow').classList.remove('open');
+  });
+  $('speedBtn').addEventListener('click', () => {
+    $('volumeRow').classList.remove('open');
+    $('speedRow').classList.toggle('open');
+  });
 
   $('docText').addEventListener('click', (e) => {
     const link = e.target.closest('.figlink');
@@ -728,7 +744,7 @@ function bind() {
     reader.setVoice(allVoices.find((v) => v.voiceURI === settings.voiceURI) || null);
   });
   $('rate').addEventListener('input', (e) => {
-    settings.rate = Number(e.target.value); $('rateVal').textContent = settings.rate.toFixed(2) + '×';
+    settings.rate = Number(e.target.value); showSpeed();
   });
   $('rate').addEventListener('change', () => { saveSettings(); reader.setRate(settings.rate); });
   $('pitch').addEventListener('input', (e) => {
@@ -759,7 +775,7 @@ function bind() {
   $('volume').addEventListener('change', () => { saveSettings(); reader.setVolume(settings.volume); });
   const narrow = window.matchMedia('(max-width: 600px)');
   $('muteBtn').addEventListener('click', () => {
-    if (narrow.matches) { $('volumeRow').classList.toggle('open'); return; }
+    if (narrow.matches) { $('speedRow').classList.remove('open'); $('volumeRow').classList.toggle('open'); return; }
     if (settings.volume > 0) { volBefore = settings.volume; settings.volume = 0; } else settings.volume = volBefore || 1;
     $('volume').value = settings.volume; showVolume(); saveSettings(); reader.setVolume(settings.volume);
   });

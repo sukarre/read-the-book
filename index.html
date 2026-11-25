@@ -106,7 +106,16 @@
         <svg viewBox="0 0 24 24"><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg>
       </button>
       </div>
-      <div id="volumeRow" class="ctl-side volume-row">
+      <div class="ctl-side ctl-right">
+      <div id="speedRow" class="speed-wrap">
+        <button id="speedBtn" class="speed-pill" type="button" aria-label="Reading speed" title="Reading speed"><span id="speedBtnVal">1.00×</span></button>
+        <div class="speed-pop">
+          <span class="pop-label">Speed</span>
+          <input id="rate" type="range" min="0.5" max="2" step="0.05" aria-label="Reading speed" />
+          <span id="rateVal" class="vol-val"></span>
+        </div>
+      </div>
+      <div id="volumeRow" class="volume-row">
         <button id="muteBtn" class="icon small" type="button" aria-label="Mute" title="Volume">
           <svg id="volIcon" viewBox="0 0 24 24"></svg>
         </button>
@@ -114,6 +123,7 @@
           <input id="volume" type="range" min="0" max="1" step="0.05" aria-label="Volume" />
           <span id="volVal" class="vol-val">100%</span>
         </div>
+      </div>
       </div>
     </div>
 
@@ -123,9 +133,6 @@
       </label>
       <label class="voice-label">Voice
         <select id="voiceSelect"></select>
-      </label>
-      <label>Speed <span id="rateVal"></span>
-        <input id="rate" type="range" min="0.5" max="1.6" step="0.05" />
       </label>
       <label>Pitch <span id="pitchVal"></span>
         <input id="pitch" type="range" min="0.7" max="1.3" step="0.05" />
