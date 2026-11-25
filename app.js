@@ -550,6 +550,81 @@ function bindZoom() {
   applyZoom();
 }
 
+// ---------- Hold and drag to scroll (mouse; touch screens already do this) ----------
+/**
+ * Holding the mouse button on `area` and moving scrolls it like a touch screen, with a little glide
+ * on release. A real drag never counts as a click, so it does not jump the reading position.
+ * scrollY / scrollX: functions that scroll by (dy) / (dx) and return nothing.
+ */
+function dragScroll(area, scrollY, scrollX) {
+  let drag = null;
+  let glide = 0;
+  area.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    if (e.target.closest('button, a, input, select, textarea, .zoom-pill')) return;
+    cancelAnimationFrame(glide);
+    drag = { x: e.clientX, y: e.clientY, moved: false, vx: 0, vy: 0, t: performance.now(), id: e.pointerId };
+  });
+  window.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dx = e.clientX - drag.x;
+    const dy = e.clientY - drag.y;
+    if (!drag.moved) {
+      if (Math.hypot(dx, dy) < 6) return; // a small wobble is still a click
+      drag.moved = true;
+      document.body.classList.add('dragging');
+      getSelection()?.removeAllRanges();
+    }
+    const now = performance.now();
+    const dt = Math.max(1, now - drag.t);
+    drag.vx = 0.8 * (-dx / dt) + 0.2 * drag.vx;
+    drag.vy = 0.8 * (-dy / dt) + 0.2 * drag.vy;
+    drag.t = now;
+    drag.x = e.clientX;
+    drag.y = e.clientY;
+    scrollY(-dy);
+    scrollX?.(-dx);
+    e.preventDefault();
+  });
+  const end = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const d = drag;
+    drag = null;
+    if (!d.moved) return;
+    document.body.classList.remove('dragging');
+    // Swallow the click that follows a drag.
+    const stop = (c) => { c.stopPropagation(); c.preventDefault(); };
+    window.addEventListener('click', stop, { capture: true, once: true });
+    setTimeout(() => window.removeEventListener('click', stop, { capture: true }), 0);
+    // Glide: keep moving at the release speed, slowing down (about half a second).
+    if (performance.now() - d.t > 80) return; // the mouse stopped before release
+    let { vx, vy } = d;
+    let last = performance.now();
+    const step = (now) => {
+      const dt = Math.min(32, Math.max(0, now - last)); // a slow frame must not end the glide at once
+      last = now;
+      vx *= Math.pow(0.994, dt);
+      vy *= Math.pow(0.994, dt);
+      if (Math.abs(vx) < 0.02 && Math.abs(vy) < 0.02) return;
+      scrollY(vy * dt);
+      scrollX?.(vx * dt);
+      glide = requestAnimationFrame(step);
+    };
+    glide = requestAnimationFrame(step);
+  };
+  window.addEventListener('pointerup', end);
+  window.addEventListener('pointercancel', end);
+  // Mouse wheel or a new grab stops the glide.
+  area.addEventListener('wheel', () => cancelAnimationFrame(glide), { passive: true });
+}
+
+function bindDragScroll() {
+  const pv = $('pageView');
+  dragScroll($('docSection'), (dy) => window.scrollBy(0, dy), (dx) => { if (activeView() === 'page') pv.scrollLeft += dx; });
+  const fb = $('figBody');
+  dragScroll(fb, (dy) => { fb.scrollTop += dy; }, (dx) => { fb.scrollLeft += dx; });
+}
+
 // ---------- Opening documents ----------
 async function openFiles(files) {
   files = [...files];
@@ -978,6 +1053,7 @@ async function init() {
   applySettingsUI();
   bind();
   bindZoom();
+  bindDragScroll();
   initVoices();
 
   const saved = await loadDoc();
