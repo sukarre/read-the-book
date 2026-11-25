@@ -63,7 +63,7 @@ public class ReadAloudPlugin extends Plugin implements Speaker.Listener {
         speaker.start(
                 call.getInt("index", 0), call.getInt("offset", 0),
                 call.getString("voice", null),
-                call.getFloat("rate", 0.95f), call.getFloat("pitch", 1f),
+                call.getFloat("rate", 0.95f), call.getFloat("pitch", 1f), call.getFloat("volume", 1f),
                 call.getString("title", null));
         call.resolve();
     }
@@ -82,7 +82,7 @@ public class ReadAloudPlugin extends Plugin implements Speaker.Listener {
     @PluginMethod
     public void preview(PluginCall call) {
         speaker.preview(call.getString("text", "Hello."), call.getString("voice", null),
-                call.getFloat("rate", 0.95f), call.getFloat("pitch", 1f));
+                call.getFloat("rate", 0.95f), call.getFloat("pitch", 1f), call.getFloat("volume", 1f));
         call.resolve();
     }
 

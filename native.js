@@ -41,6 +41,7 @@ export class NativeReader {
     this.voice = null;
     this.rate = 0.95;
     this.pitch = 1;
+    this.volume = 1;
     this.onSentence = onSentence;
     this.onState = onState;
     this.onEnd = onEnd;
@@ -97,7 +98,7 @@ export class NativeReader {
     const p = (await this.ready).api;
     p.start({
       index: this.index, offset: this.offset,
-      voice: this.voice?.voiceURI || null, rate: this.rate, pitch: this.pitch,
+      voice: this.voice?.voiceURI || null, rate: this.rate, pitch: this.pitch, volume: this.volume,
       title: document.title.replace(/ · Read the Book$/, ''),
     }).catch((e) => { console.warn('Speech failed', e); this.playing = false; this.onState(false); });
   }
@@ -134,11 +135,12 @@ export class NativeReader {
   setVoice(v) { this.voice = v; this.restartIfPlaying(); }
   setRate(r) { this.rate = r; this.restartIfPlaying(); }
   setPitch(p) { this.pitch = p; this.restartIfPlaying(); }
+  setVolume(v) { this.volume = v; this.restartIfPlaying(); }
   restartIfPlaying() { if (this.playing) this.play(this.index, this.wordStart(this.offset)); }
 
   async preview(text) {
     await this.pause();
     const p = (await this.ready).api;
-    p.preview({ text, voice: this.voice?.voiceURI || null, rate: this.rate, pitch: this.pitch }).catch(() => {});
+    p.preview({ text, voice: this.voice?.voiceURI || null, rate: this.rate, pitch: this.pitch, volume: this.volume }).catch(() => {});
   }
 }

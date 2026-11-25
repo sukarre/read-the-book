@@ -43,6 +43,7 @@ export class Reader {
     this.voice = null;
     this.rate = 0.95;
     this.pitch = 1;
+    this.volume = 1;
     this.gen = 0;          // increments on every start/stop so stale callbacks are ignored
     this.current = null;   // keep a reference: Chrome can garbage-collect utterances mid-speech
     this.onSentence = onSentence;
@@ -85,6 +86,7 @@ export class Reader {
     if (this.voice) { u.voice = this.voice; u.lang = this.voice.lang; }
     u.rate = this.rate;
     u.pitch = this.pitch;
+    u.volume = this.volume;
     let started = false;
     u.onstart = () => { started = true; };
     // Remember how far we got, so pause → play continues from this word, not the sentence start.
@@ -173,13 +175,14 @@ export class Reader {
   setVoice(v) { this.voice = v; this.restartIfPlaying(); }
   setRate(r) { this.rate = r; this.restartIfPlaying(); }
   setPitch(p) { this.pitch = p; this.restartIfPlaying(); }
+  setVolume(v) { this.volume = v; this.restartIfPlaying(); }
   restartIfPlaying() { if (this.playing) this.play(this.index, this.offset || 0); }
 
   preview(text) {
     this.pause();
     const u = new SpeechSynthesisUtterance(text);
     if (this.voice) { u.voice = this.voice; u.lang = this.voice.lang; }
-    u.rate = this.rate; u.pitch = this.pitch;
+    u.rate = this.rate; u.pitch = this.pitch; u.volume = this.volume;
     this.current = u;
     this.synth.speak(u);
   }

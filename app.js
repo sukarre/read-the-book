@@ -49,7 +49,7 @@ const saveDoc = (doc) => idb('readwrite', (s) => s.put(doc, 'current')).catch((e
 const loadDoc = () => idb('readonly', (s) => s.get('current')).catch(() => null);
 const clearDoc = () => idb('readwrite', (s) => s.delete('current')).catch(() => {});
 
-const settings = Object.assign({ lang: 'en', voiceURI: null, rate: 0.95, pitch: 1, sleep: 0, view: 'page' }, lsGet(LS.settings, {}));
+const settings = Object.assign({ lang: 'en', voiceURI: null, rate: 0.95, pitch: 1, volume: 1, sleep: 0, view: 'page', autoOpenFig: false, figPlace: 'printed' }, lsGet(LS.settings, {}));
 const saveSettings = () => lsSet(LS.settings, settings);
 
 // ---------- State ----------
@@ -60,6 +60,7 @@ let pageEls = [];        // page-view page elements
 let pageSentences = [];  // page index -> sentence indexes on it (for click-to-read)
 let hlEls = [];
 let lastIdx = -1;
+let sentenceFigs = [];   // sentence index -> labels of figures it mentions
 let sleepTimer = null;
 
 const reader = new (isNative ? NativeReader : Reader)({
@@ -190,8 +191,18 @@ function appendWithFigureLinks(el, text) {
   el.append(text.slice(last));
 }
 
+/** Labels of known figures mentioned in `text` ("Figures 3.1 and 3.2" -> ['3.1', '3.2']). */
+function mentionedFigures(text) {
+  const out = [];
+  for (const m of text.matchAll(FIG_MENTION)) {
+    for (const x of m[0].matchAll(/\d+(?:\.\d+)*/g)) if (figByLabel.has(x[0]) && !out.includes(x[0])) out.push(x[0]);
+  }
+  return out;
+}
+
 let panelFig = null;
 async function openFigure(block) {
+  if (!block) return;
   panelFig = block;
   const body = $('figBody');
   body.textContent = '';
@@ -204,6 +215,7 @@ async function openFigure(block) {
   }
   document.body.classList.add('panel-open');
   $('figPanel').hidden = false;
+  markOpenChip();
   if (block.src) {
     const img = document.createElement('img');
     img.src = block.src;
@@ -220,6 +232,7 @@ async function openFigure(block) {
 
 function closeFigure() {
   panelFig = null;
+  markOpenChip();
   $('figPanel').hidden = true;
   document.body.classList.remove('panel-open');
   const c = $('figBody').querySelector('canvas');
@@ -247,9 +260,38 @@ function buildTextView() {
   figByLabel = new Map();
   for (const b of doc.blocks) if (b.type === 'fig' && b.label && !figByLabel.has(b.label)) figByLabel.set(b.label, b);
   spans = new Array(doc.sentences.length);
+  sentenceFigs = new Array(doc.sentences.length);
+  // Which figures each sentence mentions (captions excluded), and the first paragraph mentioning each.
+  const firstMention = new Map();
+  doc.blocks.forEach((b, bi) => {
+    if (b.type !== 'p' || b.tag === 'caption') return;
+    for (const i of b.s) {
+      const labels = mentionedFigures(doc.sentences[i]);
+      if (labels.length) sentenceFigs[i] = labels;
+      for (const l of labels) if (!firstMention.has(l)) firstMention.set(l, bi);
+    }
+  });
+  // Optional: show each figure right after the paragraph that first mentions it.
+  let order = doc.blocks;
+  if (settings.figPlace === 'mention') {
+    const after = new Map();
+    const moved = new Set();
+    for (const b of doc.blocks) {
+      const bi = b.type === 'fig' && b.label ? firstMention.get(b.label) : undefined;
+      if (bi === undefined) continue;
+      moved.add(b);
+      if (!after.has(bi)) after.set(bi, []);
+      after.get(bi).push(b);
+    }
+    order = [];
+    doc.blocks.forEach((b, bi) => {
+      if (!moved.has(b)) order.push(b);
+      for (const f of after.get(bi) || []) order.push(f);
+    });
+  }
   let lastPage = null;
-  for (const block of doc.blocks) {
-    if (block.page !== undefined && block.page !== lastPage && doc.pages.length > 1) {
+  for (const block of order) {
+    if (block.type === 'p' && block.page !== undefined && block.page !== lastPage && doc.pages.length > 1) {
       const mark = document.createElement('div');
       mark.className = 'page-mark';
       mark.textContent = doc.pages[block.page].label.startsWith('photo') ? doc.pages[block.page].label : 'page ' + doc.pages[block.page].label;
@@ -362,6 +404,7 @@ function showDoc(d, startAt) {
   document.title = d.title + ' · Read the Book';
   lastIdx = -1;
   hlEls = [];
+  chipKey = null;
   buildTextView();
   buildPageView();
   $('seek').max = Math.max(0, d.sentences.length - 1);
@@ -378,6 +421,8 @@ function closeDoc() {
   lsSet(LS.pos, 0);
   $('docSection').hidden = true;
   $('player').hidden = true;
+  $('figChips').hidden = true;
+  chipKey = '';
   $('openPanel').hidden = false;
   $('docText').textContent = '';
   $('pageView').textContent = '';
@@ -390,6 +435,35 @@ function showStatus(text, fraction) {
   $('statusBar').style.width = Math.round((fraction || 0) * 100) + '%';
 }
 function hideStatus() { $('status').hidden = true; }
+
+// ---------- Figure button above the player ----------
+// When the narration mentions a figure, a "Figure 3.1" button appears; it stays for a few
+// sentences so there is time to tap it. Tapping opens the figure pane (tap again to close).
+const FIG_CHIP_SPAN = 8;
+let chipKey = '';
+function updateFigChips(i) {
+  let labels = null;
+  for (let k = i; k >= Math.max(0, i - FIG_CHIP_SPAN); k--) if (sentenceFigs[k]) { labels = sentenceFigs[k]; break; }
+  const key = labels ? labels.join(',') : '';
+  if (key === chipKey) { markOpenChip(); return; }
+  chipKey = key;
+  const box = $('figChips');
+  box.textContent = '';
+  box.hidden = !labels;
+  for (const l of (labels || []).slice(0, 3)) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'fig-chip';
+    b.dataset.label = l;
+    b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2zM8.5 13.5l2.5 3 3.5-4.5 4.5 6H5l3.5-4.5z"/></svg>';
+    b.append('Figure ' + l);
+    box.appendChild(b);
+  }
+  markOpenChip();
+}
+function markOpenChip() {
+  for (const b of $('figChips').children) b.classList.toggle('on', b.dataset.label === panelFig?.label);
+}
 
 // ---------- Highlighting ----------
 function highlight(i) {
@@ -421,7 +495,12 @@ function highlight(i) {
   $('seek').value = i;
   $('posLabel').textContent = `${i + 1} / ${doc.sentences.length}`;
   lsSet(LS.pos, i);
-  if (reader.playing) scrollToSentence(i, 'smooth');
+  updateFigChips(i);
+  if (reader.playing) {
+    scrollToSentence(i, 'smooth');
+    const labels = sentenceFigs[i];
+    if (settings.autoOpenFig && labels && !labels.includes(panelFig?.label)) openFigure(figByLabel.get(labels[0]));
+  }
 }
 
 function scrollToSentence(i, behavior, force) {
@@ -515,8 +594,25 @@ function applySettingsUI() {
   $('rateVal').textContent = Number(settings.rate).toFixed(2) + '×';
   $('pitchVal').textContent = Number(settings.pitch).toFixed(2);
   $('sleepSelect').value = String(settings.sleep);
+  $('autoFig').checked = !!settings.autoOpenFig;
+  $('figPlace').value = settings.figPlace;
+  $('volume').value = settings.volume;
+  showVolume();
+  reader.volume = settings.volume;
   reader.rate = settings.rate;
   reader.pitch = settings.pitch;
+}
+
+function showVolume() {
+  const v = Number(settings.volume);
+  $('volume').style.setProperty('--fill', v * 100 + '%');
+  $('volVal').textContent = Math.round(v * 100) + '%';
+  $('volIcon').innerHTML = v === 0
+    ? '<path d="M16.5 12A4.5 4.5 0 0 0 14 8v2.2l2.45 2.45c.03-.2.05-.42.05-.65zM19 12c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.8 8.8 0 0 0 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.99 8.99 0 0 0 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4 9.91 6.09 12 8.18V4z"/>'
+    : v < 0.5
+      ? '<path d="M18.5 12A4.5 4.5 0 0 0 16 8v8a4.47 4.47 0 0 0 2.5-4zM5 9v6h4l5 5V4L9 9H5z"/>'
+      : '<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.47 4.47 0 0 0 2.5-4zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>';
+  $('muteBtn').setAttribute('aria-label', v === 0 ? 'Unmute' : 'Mute');
 }
 
 function armSleepTimer() {
@@ -566,7 +662,7 @@ function bind() {
   });
   $('settingsBtn').addEventListener('click', () => { $('settings').hidden = !$('settings').hidden; });
   // Tapping the page closes the settings, so they never get in the way of reading.
-  $('docSection').addEventListener('pointerdown', () => { $('settings').hidden = true; });
+  $('docSection').addEventListener('pointerdown', () => { $('settings').hidden = true; $('volumeRow').classList.remove('open'); });
 
   $('docText').addEventListener('click', (e) => {
     const link = e.target.closest('.figlink');
@@ -615,6 +711,31 @@ function bind() {
   $('pitch').addEventListener('change', () => { saveSettings(); reader.setPitch(settings.pitch); });
   $('sleepSelect').addEventListener('change', (e) => {
     settings.sleep = Number(e.target.value); saveSettings(); if (reader.playing) armSleepTimer();
+  });
+  $('autoFig').addEventListener('change', (e) => { settings.autoOpenFig = e.target.checked; saveSettings(); });
+  $('figChips').addEventListener('click', (e) => {
+    const b = e.target.closest('.fig-chip');
+    if (!b) return;
+    if (panelFig?.label === b.dataset.label) closeFigure();
+    else openFigure(figByLabel.get(b.dataset.label));
+  });
+  $('figPlace').addEventListener('change', (e) => {
+    settings.figPlace = e.target.value; saveSettings();
+    if (!doc) return;
+    buildTextView();
+    const i = lastIdx; lastIdx = -1;
+    if (i >= 0) highlight(i);
+    if (activeView() === 'text') scrollToSentence(Math.max(0, i), 'auto', true);
+  });
+  // Volume: live while dragging (applies from the next sentence; the current one is restarted on release).
+  let volBefore = settings.volume || 1;
+  $('volume').addEventListener('input', (e) => { settings.volume = Number(e.target.value); showVolume(); reader.volume = settings.volume; });
+  $('volume').addEventListener('change', () => { saveSettings(); reader.setVolume(settings.volume); });
+  const narrow = window.matchMedia('(max-width: 600px)');
+  $('muteBtn').addEventListener('click', () => {
+    if (narrow.matches) { $('volumeRow').classList.toggle('open'); return; }
+    if (settings.volume > 0) { volBefore = settings.volume; settings.volume = 0; } else settings.volume = volBefore || 1;
+    $('volume').value = settings.volume; showVolume(); saveSettings(); reader.setVolume(settings.volume);
   });
   $('previewBtn').addEventListener('click', () =>
     reader.preview('Hello. Settle in, get comfortable, and I will read this for you, nice and slowly.'));

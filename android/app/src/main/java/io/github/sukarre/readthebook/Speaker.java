@@ -55,7 +55,7 @@ public class Speaker {
     private int current = 0, currentOffset = 0;
     private int nextToQueue = 0;
     private String voiceName = null;
-    private float rate = 0.95f, pitch = 1f;
+    private float rate = 0.95f, pitch = 1f, volume = 1f;
     private String title = "Read the Book";
 
     private Listener listener;
@@ -119,15 +119,15 @@ public class Speaker {
     }
 
     // ---------- Playback ----------
-    public void start(int index, int offset, String voice, float rate, float pitch, String title) {
+    public void start(int index, int offset, String voice, float rate, float pitch, float volume, String title) {
         main.post(() -> {
             if (!ready) {
                 if (tts == null || pending.size() > 4) return;
-                whenReady(() -> { if (ready) start(index, offset, voice, rate, pitch, title); });
+                whenReady(() -> { if (ready) start(index, offset, voice, rate, pitch, volume, title); });
                 return;
             }
             if (sentences.isEmpty()) return;
-            this.voiceName = voice; this.rate = rate; this.pitch = pitch;
+            this.voiceName = voice; this.rate = rate; this.pitch = pitch; this.volume = volume;
             if (title != null && !title.isEmpty()) this.title = title;
             begin(index, offset);
         });
@@ -175,6 +175,7 @@ public class Speaker {
         if (i == startIndex && startOffset > 0) text = text.substring(startOffset);
         if (i != startIndex) tts.playSilentUtterance(GAP_MS, TextToSpeech.QUEUE_ADD, "gap:" + gen + ":" + i);
         Bundle params = new Bundle();
+        params.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volume);
         tts.speak(text, TextToSpeech.QUEUE_ADD, params, gen + ":" + i);
     }
 
@@ -204,13 +205,15 @@ public class Speaker {
         else if (was) ReaderService.update(ctx, false, title);
     }
 
-    public void preview(String text, String voice, float rate, float pitch) {
+    public void preview(String text, String voice, float rate, float pitch, float volume) {
         main.post(() -> {
             if (!ready) return;
             stopInternal(true);
             this.voiceName = voice; this.rate = rate; this.pitch = pitch;
             applyVoice();
-            tts.speak(text, TextToSpeech.QUEUE_FLUSH, new Bundle(), "preview:" + gen);
+            Bundle params = new Bundle();
+            params.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volume);
+            tts.speak(text, TextToSpeech.QUEUE_FLUSH, params, "preview:" + gen);
         });
     }
 
