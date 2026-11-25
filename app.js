@@ -365,7 +365,13 @@ function applyView() {
   $('docText').hidden = view !== 'text';
   $('pageView').hidden = view !== 'page';
   $('viewBtn').hidden = !hasPageView();
-  $('viewBtn').textContent = view === 'page' ? 'Text view' : 'Page view';
+  // The button shows the view it switches to.
+  const next = view === 'page' ? 'Text view' : 'Page view';
+  $('viewBtn').title = next;
+  $('viewBtn').setAttribute('aria-label', next);
+  $('viewIcon').innerHTML = view === 'page'
+    ? '<path d="M3 5h18v2H3zm0 4h18v2H3zm0 4h18v2H3zm0 4h12v2H3z"/>'
+    : '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/>';
   // Hidden elements never report as visible, so nudge lazy loading after switching.
   requestAnimationFrame(() => {
     if (lastIdx >= 0) scrollToSentence(lastIdx, 'auto', true);
@@ -645,7 +651,12 @@ function bind() {
     } catch (err) { alert(err.message); }
   });
 
-  $('closeDoc').addEventListener('click', () => { closeFigure(); closeDoc(); });
+  $('closeDoc').addEventListener('click', () => {
+    // Closing forgets the current document (a long book takes a while to open again), so ask first.
+    if (!confirm('Close this document and open another?\nYour place in this one will be lost.')) return;
+    closeFigure();
+    closeDoc();
+  });
   $('figClose').addEventListener('click', closeFigure);
   $('figGoto').addEventListener('click', () => { if (panelFig) gotoFigurePage(panelFig); });
   $('viewBtn').addEventListener('click', () => {

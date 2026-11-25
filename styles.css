@@ -268,3 +268,14 @@ button.icon:active { transform: scale(0.93); }
 @keyframes chip-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 /* Phones: the figure pane is a bottom sheet over the player; keep the button above it. */
 @media (max-width: 899px) { body.panel-open .fig-chips { position: fixed; bottom: calc(58vh + 10px); } }
+
+/* Left side of the controls: open another document, switch page/text view */
+.ctl-left { display: flex; align-items: center; gap: 4px; justify-content: flex-start; }
+.ctl-left button.icon.small { width: 38px; height: 38px; }
+@media (max-width: 600px) {
+  .ctl-center button.icon:not(.play) { width: 44px; height: 44px; }
+  .ctl-center button.icon.play { width: 56px; height: 56px; }
+  .ctl-left { gap: 0; }
+  .ctl-left button.icon.small { width: 36px; height: 36px; }
+  .ctl-left button.icon.small svg { width: 20px; height: 20px; }
+}
