@@ -771,6 +771,10 @@ function bind() {
 }
 
 async function init() {
+  // Track the player's height so the figure sheet (phones) can sit right above it.
+  new ResizeObserver(([e]) => {
+    document.documentElement.style.setProperty('--player-h', Math.ceil(e.target.getBoundingClientRect().height) + 'px');
+  }).observe($('player'));
   if (!isNative && !('speechSynthesis' in window)) {
     alert('This browser cannot speak text. Please use Microsoft Edge or Google Chrome.');
   }

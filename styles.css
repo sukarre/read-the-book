@@ -182,7 +182,12 @@ button.icon.small svg { width: 22px; height: 22px; }
 }
 /* Phones: the panel slides up over the bottom half. */
 @media (max-width: 899px) {
-  .fig-panel { top: auto; left: 0; width: auto; height: 58vh; border-left: none; border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; z-index: 30; }
+  /* Sits directly above the player, so the controls stay visible and usable. */
+  .fig-panel {
+    top: auto; left: 0; width: auto; bottom: var(--player-h, 0px);
+    height: min(55vh, calc(100vh - var(--player-h, 0px) - 70px));
+    border-left: none; border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; z-index: 30;
+  }
 }
 
 /* Settings: label text and its value on one line */
@@ -267,7 +272,7 @@ button.icon:active { transform: scale(0.93); }
 .fig-chip.on { background: var(--accent); color: var(--accent-ink); }
 @keyframes chip-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 /* Phones: the figure pane is a bottom sheet over the player; keep the button above it. */
-@media (max-width: 899px) { body.panel-open .fig-chips { position: fixed; bottom: calc(58vh + 10px); } }
+@media (max-width: 899px) { body.panel-open .fig-chips { position: fixed; z-index: 31; bottom: calc(var(--player-h, 0px) + min(55vh, calc(100vh - var(--player-h, 0px) - 70px)) + 10px); } }
 
 /* Left side of the controls: open another document, switch page/text view */
 .ctl-left { display: flex; align-items: center; gap: 4px; justify-content: flex-start; }
