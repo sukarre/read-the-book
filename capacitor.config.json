@@ -1,0 +1,8 @@
+{
+  "appId": "io.github.sukarre.readthebook",
+  "appName": "Read the Book",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#f6f2ea"
+  }
+}

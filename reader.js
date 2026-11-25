@@ -6,6 +6,8 @@
 const WARM_VOICES = /aria|jenny|emma|ava|sonia|libby|natasha|neerja|swara|shruti|michelle|ana\b|clara|aditi|kajal|heera|serena|samantha|karen|moira|tessa/i;
 
 export function voiceScore(v) {
+  // Android voices from the native plugin carry Android's quality rating (500 very high, 400 high).
+  if (typeof v.quality === 'number') return (v.quality >= 400 ? 100 : 30) + (v.network ? 0 : 5) + (v.default ? 3 : 0);
   const n = v.name;
   let s = 0;
   if (/natural/i.test(n)) s += 100;          // Microsoft Edge neural voices

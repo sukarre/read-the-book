@@ -1,0 +1,19 @@
+{
+  "name": "read-the-book",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Reads PDFs, Word files, photos and scans aloud in a calm, natural voice",
+  "type": "module",
+  "scripts": {
+    "build:web": "node scripts/copy-web.mjs",
+    "sync": "npm run build:web && cap sync android",
+    "apk": "npm run sync && cd android && gradlew.bat assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/core": "^8.6.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.6.2"
+  }
+}

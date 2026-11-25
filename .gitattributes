@@ -2,3 +2,5 @@
 *.docx binary
 *.png binary
 
+*.jar binary
+android/gradlew text eol=lf

@@ -1,5 +1,6 @@
 import { extractFiles, docFromText, openPdf } from './extract.js';
 import { Reader, getVoices, voiceScore, isNaturalVoice } from './reader.js';
+import { isNative, NativeReader, getNativeVoices, openVoiceSettings } from './native.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -61,7 +62,7 @@ let hlEls = [];
 let lastIdx = -1;
 let sleepTimer = null;
 
-const reader = new Reader({
+const reader = new (isNative ? NativeReader : Reader)({
   onSentence: highlight,
   onState: (playing) => {
     $('playIcon').toggleAttribute('hidden', playing);
@@ -472,7 +473,11 @@ function populateVoices() {
 
   const hint = $('voiceHint');
   const hasNatural = list.some(isNaturalVoice);
-  if (!allVoices.length) {
+  if (isNative) {
+    hint.innerHTML = (fallback ? `No ${LANGS.find((l) => l[0] === settings.lang)[1]} voice is installed, so all voices are listed. ` : '★ marks high-quality voices. ')
+      + '<a href="#" id="ttsSettings">Install more voices</a> in Android text-to-speech settings (choose Speech Services by Google).';
+    $('ttsSettings').onclick = (e) => { e.preventDefault(); openVoiceSettings(); };
+  } else if (!allVoices.length) {
     hint.textContent = 'This browser has no speech voices. Use Microsoft Edge or Chrome.';
   } else if (fallback) {
     hint.textContent = `No ${LANGS.find((l) => l[0] === settings.lang)[1]} voice is installed, so all voices are listed. On Android, add one in Settings → Text-to-speech; on Windows, in Settings → Time & language → Speech.`;
@@ -486,6 +491,15 @@ function populateVoices() {
 }
 
 async function initVoices() {
+  if (isNative) {
+    allVoices = await getNativeVoices();
+    populateVoices();
+    // Voices installed in Android settings while the app was in the background.
+    document.addEventListener('visibilitychange', async () => {
+      if (document.visibilityState === 'visible') { allVoices = await getNativeVoices(); populateVoices(); }
+    });
+    return;
+  }
   allVoices = await getVoices();
   populateVoices();
   window.speechSynthesis?.addEventListener?.('voiceschanged', () => {
@@ -623,7 +637,7 @@ function bind() {
 }
 
 async function init() {
-  if (!('speechSynthesis' in window)) {
+  if (!isNative && !('speechSynthesis' in window)) {
     alert('This browser cannot speak text. Please use Microsoft Edge or Google Chrome.');
   }
   populateLangs();
@@ -634,7 +648,7 @@ async function init() {
   const saved = await loadDoc();
   if (saved?.v === 2 && saved.sentences?.length) showDoc(saved, lsGet(LS.pos, 0));
 
-  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  if (!isNative && 'serviceWorker' in navigator && location.protocol !== 'file:') {
     navigator.serviceWorker.register('sw.js').catch((e) => console.warn('SW registration failed', e));
   }
 }

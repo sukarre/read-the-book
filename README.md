@@ -30,6 +30,32 @@ push this folder to a GitHub repo, enable Pages, and open the URL in Chrome on t
 → menu → **Add to Home screen / Install app**.
 For the best voice: Android Settings → Text-to-speech → engine **Speech Services by Google** → install a high-quality voice.
 
+## Android app (APK)
+
+The APK wraps the same web app with Capacitor and adds a small native plugin
+(`android/app/src/main/java/io/github/sukarre/readthebook/`):
+
+- speaks with Android's own text-to-speech (Google voices; Android's WebView has no web voices),
+- keeps reading with the screen off (foreground media service + wake lock, sentences queued ahead in the engine),
+- shows a notification with Pause / Play / Stop, also on the lock screen,
+- pauses for phone calls and other audio (audio focus), and resumes from the same word.
+
+Build it (needs Node.js and Android Studio; uses Android Studio's bundled Java):
+
+```powershell
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+npm install
+npm run apk
+```
+
+The APK is written to `android/app/build/outputs/apk/debug/app-debug.apk`.
+Install it on the phone: copy the file over (USB, Drive, email to yourself), open it, and allow
+"Install unknown apps" for the app you opened it from.
+It is signed with this PC's debug key (`%USERPROFILE%\.android\debug.keystore`): later builds from the same PC
+install over it and keep your data; builds signed with another key must be uninstalled first.
+
+`npm run apk` copies the web files into `www/` (`scripts/copy-web.mjs`); edit the files in the repo root, not in `www/`.
+
 ## What it reads
 
 | Input | How |
@@ -55,6 +81,8 @@ to download the libraries and OCR language data, which are then cached.
 - `reader.js`: voice ranking, speech playback
 - `private/`: your own books for testing (git-ignored, never published)
 - `sw.js`, `manifest.webmanifest`, `icons/`: installable PWA and offline support
+- `native.js`: speech backend for the Android app (talks to the native ReadAloud plugin)
+- `android/`, `capacitor.config.json`, `package.json`, `scripts/`: Android app build
 - `test/`: sample files for every input type
 
 ## Known limits
@@ -62,7 +90,7 @@ to download the libraries and OCR language data, which are then cached.
 - Figure detection is heuristic. It handles images, charts drawn with text (e.g. Market Profile letter grids)
   and vector charts that have a caption; a vector chart with no caption shows in page view but not in text view.
 - Opening a long book takes a while the first time (about 20 seconds for a 225-page book); after that it opens instantly.
-- **Android screen lock**: browser speech stops when the screen turns off or you leave the app. Fixing this requires
-  wrapping the app as a native APK (Capacitor) with a foreground audio service.
+- **Android screen lock (web version only)**: in Chrome, speech stops when the screen turns off or you leave the app.
+  The APK keeps reading.
 - **Voice quality depends on the device's voices.** For studio-grade voices on every device, add a cloud
   text-to-speech engine (Azure Neural, Google, ElevenLabs). That costs money per character and sends text to that service.
