@@ -1,5 +1,5 @@
 // Service worker: makes the app installable and usable offline after the first visit.
-const CACHE = 'rtb-v5';
+const CACHE = 'rtb-v6';
 const SHELL = [
   './', './index.html', './styles.css', './app.js', './extract.js', './reader.js', './segment.js', './native.js',
   './manifest.webmanifest', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png',

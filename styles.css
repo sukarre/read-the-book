@@ -320,3 +320,39 @@ button.icon:active { transform: scale(0.93); }
   .player { padding-left: 8px; padding-right: 8px; }
   .speed-pop { right: 0; }
 }
+
+/* ---------- Zoom ---------- */
+.doc-text { font-size: calc(1.15rem * var(--tz, 1)); }
+.page-view { overflow-x: auto; align-items: safe center; padding-bottom: 4px; }
+.page { flex: none; width: min(calc(100% * var(--pz, 1)), calc(820px * var(--pz, 1))); }
+body.page-wide main { max-width: none; }
+body.page-wide .doc-head { max-width: 820px; margin-left: auto; margin-right: auto; }
+#docSection, .fig-body { touch-action: pan-x pan-y; }
+.fig-body .fig-page { width: calc(100% * var(--fz, 1)); margin: 0 auto; }
+.fig-body > img { display: block; width: calc(100% * var(--fz, 1)); margin: 0 auto; }
+
+.zoom-pill {
+  display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--panel); overflow: hidden; flex: none;
+}
+.zoom-pill button {
+  border: 0; background: transparent; color: var(--ink); cursor: pointer; height: 32px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.zoom-pill .z-out, .zoom-pill .z-in { width: 34px; }
+.zoom-pill svg { width: 18px; height: 18px; fill: currentColor; }
+.zoom-pill .z-val { min-width: 44px; font: 600 .78rem system-ui, sans-serif; font-variant-numeric: tabular-nums; color: var(--muted); }
+.zoom-pill button:hover:not(:disabled) { color: var(--accent); }
+.zoom-pill button:disabled { opacity: .35; cursor: default; }
+/* The document's zoom floats at the bottom left, just above the controls (figure buttons are on the right). */
+.doc-zoom { position: fixed; z-index: 15; left: 12px; bottom: calc(var(--player-h, 120px) + 10px); box-shadow: var(--shadow); }
+@media (min-width: 900px) { body.panel-open .doc-zoom { left: 12px; } }
+@media (max-width: 899px) { body.panel-open .doc-zoom { display: none; } }
+@media (max-width: 600px) {
+  .zoom-pill button { height: 30px; }
+  .zoom-pill .z-out, .zoom-pill .z-in { width: 30px; }
+  .zoom-pill .z-val { min-width: 38px; font-size: .72rem; }
+  .fig-actions .btn.small { padding-left: 10px; padding-right: 10px; }
+}
+#figGoto { white-space: nowrap; }
+.fig-head strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

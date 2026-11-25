@@ -49,7 +49,7 @@ const saveDoc = (doc) => idb('readwrite', (s) => s.put(doc, 'current')).catch((e
 const loadDoc = () => idb('readonly', (s) => s.get('current')).catch(() => null);
 const clearDoc = () => idb('readwrite', (s) => s.delete('current')).catch(() => {});
 
-const settings = Object.assign({ lang: 'en', voiceURI: null, rate: 0.95, pitch: 1, volume: 1, sleep: 0, view: 'page', autoOpenFig: false, figPlace: 'printed' }, lsGet(LS.settings, {}));
+const settings = Object.assign({ lang: 'en', voiceURI: null, rate: 0.95, pitch: 1, volume: 1, sleep: 0, view: 'page', autoOpenFig: false, figPlace: 'printed', pageZoom: 1, textZoom: 1, figZoom: 1 }, lsGet(LS.settings, {}));
 const saveSettings = () => lsSet(LS.settings, settings);
 
 // ---------- State ----------
@@ -94,7 +94,8 @@ async function renderPage(pi, pxWidth) {
   }
   const pdf = await getPdf(info.src);
   const page = await pdf.getPage(info.n);
-  const scale = Math.min(4, pxWidth / info.w);
+  // Sharp up to ~3000 px wide (deep zoom); beyond that memory use outweighs the gain.
+  const scale = Math.min(3000, pxWidth) / info.w;
   const vp = page.getViewport({ scale });
   const c = document.createElement('canvas');
   c.width = Math.floor(vp.width);
@@ -120,7 +121,7 @@ const lazy = new IntersectionObserver((entries) => {
 function makeLazy(el, draw) {
   let state = '';
   el._load = async () => {
-    if (state) return;
+    if (state || !el.clientWidth) return; // hidden (other view): load when it is shown
     state = 'loading';
     try {
       const canvas = await draw();
@@ -134,6 +135,7 @@ function makeLazy(el, draw) {
       state = '';
     }
   };
+  el._refresh = () => { if (state === 'loaded') { state = ''; el._load(); } };
   el._unload = () => {
     const c = el.querySelector('canvas');
     if (c) { c.width = c.height = 0; c.remove(); }
@@ -211,7 +213,9 @@ async function openFigure(block) {
   $('figGoto').hidden = block.page === undefined || !hasPageView();
   if (block.page !== undefined) {
     const lbl = doc.pages[block.page].label;
-    $('figGoto').textContent = lbl.startsWith('photo') ? 'Show on ' + lbl : 'Go to page ' + lbl;
+    // Short label so the zoom buttons fit beside it on phones; the tooltip says it in full.
+    $('figGoto').textContent = lbl.startsWith('photo') ? lbl[0].toUpperCase() + lbl.slice(1) : 'Page ' + lbl;
+    $('figGoto').title = lbl.startsWith('photo') ? 'Show on ' + lbl : 'Go to page ' + lbl;
   }
   document.body.classList.add('panel-open');
   $('figPanel').hidden = false;
@@ -224,8 +228,7 @@ async function openFigure(block) {
   } else {
     // The whole page the figure is on, exactly as printed, with the figure outlined.
     body.textContent = 'Loading…';
-    const cssW = Math.max(300, body.clientWidth - 2 || 480);
-    const canvas = await renderPage(block.page, cssW * dpr());
+    const canvas = await renderPage(block.page, figPaneWidth() * dpr());
     if (panelFig !== block) { canvas.width = canvas.height = 0; return; }
     body.textContent = '';
     const wrap = document.createElement('div');
@@ -243,6 +246,24 @@ async function openFigure(block) {
     // Bring the figure into view inside the pane.
     if (block.rect) body.scrollTop = Math.max(0, block.rect[1] * wrap.clientHeight - 16);
   }
+}
+
+function figPaneWidth() {
+  return Math.max(300, $('figBody').clientWidth - 2 || 480) * getZoom('fig');
+}
+
+/** Redraw the open figure's page at the current zoom (sharp instead of stretched). */
+let figRedraw = 0;
+async function redrawFigure() {
+  const block = panelFig;
+  const old = $('figBody').querySelector('.fig-page canvas');
+  if (!block || block.src || !old) return;
+  const id = ++figRedraw;
+  const canvas = await renderPage(block.page, figPaneWidth() * dpr());
+  if (id !== figRedraw || panelFig !== block || !old.isConnected) { canvas.width = canvas.height = 0; return; }
+  canvas.style.width = '100%';
+  old.replaceWith(canvas);
+  old.width = old.height = 0;
 }
 
 function closeFigure() {
@@ -384,6 +405,7 @@ function applyView() {
   const next = view === 'page' ? 'Text view' : 'Page view';
   $('viewBtn').title = next;
   $('viewBtn').setAttribute('aria-label', next);
+  showZoom();
   $('viewIcon').innerHTML = view === 'page'
     ? '<path d="M3 5h18v2H3zm0 4h18v2H3zm0 4h18v2H3zm0 4h12v2H3z"/>'
     : '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/>';
@@ -391,6 +413,141 @@ function applyView() {
   requestAnimationFrame(() => {
     if (lastIdx >= 0) scrollToSentence(lastIdx, 'auto', true);
   });
+}
+
+// ---------- Zoom (page view, text view and the figure pane each keep their own) ----------
+const ZOOM_STEPS = [0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4];
+const ZOOM_RANGE = { page: [0.5, 4], text: [0.6, 2.5], fig: [0.5, 4] };
+const ZOOM_KEY = { page: 'pageZoom', text: 'textZoom', fig: 'figZoom' };
+const getZoom = (which) => Number(settings[ZOOM_KEY[which]]) || 1;
+
+/** The thing under (x, y) in the document and where in it that point is, to keep it in place while zooming. */
+function docAnchor(x, y) {
+  for (const dy of [0, -40, 40, -100, 100]) {
+    const el = document.elementFromPoint(x, y + dy)?.closest('.page, .doc-text .s, .doc-text figure, .doc-text p, .page-mark');
+    if (!el || el.closest('.fig-panel, .player, .zoom-pill')) continue;
+    const r = el.getBoundingClientRect();
+    if (!r.height) continue;
+    return { el, x, y, fx: (x - r.left) / (r.width || 1), fy: (y - r.top) / r.height };
+  }
+  return null;
+}
+function restoreAnchor(a) {
+  if (!a?.el.isConnected) return;
+  const r = a.el.getBoundingClientRect();
+  window.scrollBy(0, r.top + a.fy * r.height - a.y);
+  if (a.el.classList.contains('page')) $('pageView').scrollLeft += r.left + a.fx * r.width - a.x;
+}
+function docCenter() {
+  const m = document.querySelector('main').getBoundingClientRect();
+  return [m.left + m.width / 2, window.innerHeight * 0.4];
+}
+
+let zoomTimer = 0;
+/** Set a zoom level. (x, y) is the screen point that should stay still (pointer or pinch centre). */
+function setZoom(which, z, x, y) {
+  const [lo, hi] = ZOOM_RANGE[which];
+  z = Math.round(Math.min(hi, Math.max(lo, z)) * 100) / 100;
+  if (z === getZoom(which)) return;
+  if (which === 'fig') {
+    const b = $('figBody');
+    const r = b.getBoundingClientRect();
+    if (x === undefined) [x, y] = [r.left + r.width / 2, r.top + r.height / 2];
+    const px = (b.scrollLeft + x - r.left) / (b.scrollWidth || 1);
+    const py = (b.scrollTop + y - r.top) / (b.scrollHeight || 1);
+    settings.figZoom = z;
+    applyZoom();
+    b.scrollLeft = px * b.scrollWidth - (x - r.left);
+    b.scrollTop = py * b.scrollHeight - (y - r.top);
+  } else {
+    if (x === undefined) [x, y] = docCenter();
+    const a = docAnchor(x, y);
+    settings[ZOOM_KEY[which]] = z;
+    applyZoom();
+    restoreAnchor(a);
+  }
+  // Once the zooming stops: save, and redraw the pages sharply at their new size.
+  clearTimeout(zoomTimer);
+  zoomTimer = setTimeout(() => {
+    saveSettings();
+    if (which === 'page') for (const el of pageEls) el._refresh?.();
+    if (which === 'fig') redrawFigure();
+  }, 300);
+}
+function stepZoom(which, dir) {
+  const z = getZoom(which);
+  const next = dir > 0 ? ZOOM_STEPS.find((s) => s > z + 0.001) : [...ZOOM_STEPS].reverse().find((s) => s < z - 0.001);
+  setZoom(which, dir === 0 ? 1 : next ?? z);
+}
+function applyZoom() {
+  const root = document.documentElement.style;
+  root.setProperty('--pz', getZoom('page'));
+  root.setProperty('--tz', getZoom('text'));
+  root.setProperty('--fz', getZoom('fig'));
+  // Zoomed-in pages may use the whole window width, not just the reading column.
+  document.body.classList.toggle('page-wide', activeView() === 'page' && getZoom('page') > 1);
+  showZoom();
+}
+function showZoom() {
+  const set = (id, which) => {
+    const z = getZoom(which);
+    const [lo, hi] = ZOOM_RANGE[which];
+    const el = $(id);
+    el.querySelector('.z-val').textContent = Math.round(z * 100) + '%';
+    el.querySelector('.z-out').disabled = z <= lo;
+    el.querySelector('.z-in').disabled = z >= hi;
+  };
+  set('docZoom', doc ? activeView() : 'text');
+  set('figZoom', 'fig');
+}
+
+/** Two-finger pinch on `el` zooms `which()` (the browser's own page zoom stays off). */
+function pinchZoom(el, which) {
+  let start = null;
+  const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  const mid = (t) => [(t[0].clientX + t[1].clientX) / 2, (t[0].clientY + t[1].clientY) / 2];
+  el.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) start = { d: dist(e.touches), z: getZoom(which()), w: which() };
+  }, { passive: true });
+  el.addEventListener('touchmove', (e) => {
+    if (!start || e.touches.length !== 2) return;
+    e.preventDefault();
+    const [x, y] = mid(e.touches);
+    setZoom(start.w, start.z * dist(e.touches) / start.d, x, y);
+  }, { passive: false });
+  el.addEventListener('touchend', (e) => { if (e.touches.length < 2) start = null; });
+}
+
+function bindZoom() {
+  const wire = (id, which) => {
+    const el = $(id);
+    el.querySelector('.z-out').addEventListener('click', () => stepZoom(which(), -1));
+    el.querySelector('.z-in').addEventListener('click', () => stepZoom(which(), 1));
+    el.querySelector('.z-val').addEventListener('click', () => stepZoom(which(), 0));
+  };
+  wire('docZoom', activeView);
+  wire('figZoom', () => 'fig');
+  pinchZoom($('docSection'), activeView);
+  pinchZoom($('figBody'), () => 'fig');
+  // Ctrl + mouse wheel (and touchpad pinch, which arrives as Ctrl + wheel).
+  window.addEventListener('wheel', (e) => {
+    if (!e.ctrlKey || !doc) return;
+    e.preventDefault();
+    const which = e.target.closest?.('.fig-panel') ? 'fig' : activeView();
+    setZoom(which, getZoom(which) * Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY);
+  }, { passive: false });
+  // Ctrl + / Ctrl - / Ctrl 0 zoom the document (or the figure, while the mouse is over it).
+  let overFig = false;
+  $('figPanel').addEventListener('pointerenter', () => { overFig = true; });
+  $('figPanel').addEventListener('pointerleave', () => { overFig = false; });
+  document.addEventListener('keydown', (e) => {
+    if (!doc || !(e.ctrlKey || e.metaKey)) return;
+    const dir = { '=': 1, '+': 1, '-': -1, '_': -1, '0': 0 }[e.key];
+    if (dir === undefined) return;
+    e.preventDefault();
+    stepZoom(overFig && panelFig ? 'fig' : activeView(), dir);
+  });
+  applyZoom();
 }
 
 // ---------- Opening documents ----------
@@ -537,6 +694,14 @@ function scrollToSentence(i, behavior, force) {
   }
   if (!target) return;
   const r = target.getBoundingClientRect();
+  // Zoomed-in pages scroll sideways too: bring the highlighted line into view horizontally.
+  const pv = $('pageView');
+  if (activeView() === 'page' && pv.scrollWidth > pv.clientWidth + 1) {
+    const pr = pv.getBoundingClientRect();
+    if (r.left < pr.left || r.right > pr.right || force) {
+      pv.scrollTo({ left: pv.scrollLeft + r.left - pr.left - 16, behavior });
+    }
+  }
   const playerH = $('player').offsetHeight || 0;
   const visible = r.top > 80 && r.bottom < window.innerHeight - playerH - 20;
   if (!visible || force) {
@@ -812,6 +977,7 @@ async function init() {
   populateLangs();
   applySettingsUI();
   bind();
+  bindZoom();
   initVoices();
 
   const saved = await loadDoc();
