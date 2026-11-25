@@ -222,11 +222,26 @@ async function openFigure(block) {
     img.alt = block.alt || 'Figure';
     body.appendChild(img);
   } else {
+    // The whole page the figure is on, exactly as printed, with the figure outlined.
     body.textContent = 'Loading…';
-    const canvas = await renderFigure(block, Math.max(320, body.clientWidth || 480));
-    if (panelFig !== block) return;
+    const cssW = Math.max(300, body.clientWidth - 2 || 480);
+    const canvas = await renderPage(block.page, cssW * dpr());
+    if (panelFig !== block) { canvas.width = canvas.height = 0; return; }
     body.textContent = '';
-    body.appendChild(canvas);
+    const wrap = document.createElement('div');
+    wrap.className = 'fig-page';
+    canvas.style.width = '100%';
+    wrap.appendChild(canvas);
+    if (block.rect) {
+      const [x, y, w, h] = block.rect;
+      const box = document.createElement('div');
+      box.className = 'fig-mark';
+      Object.assign(box.style, { left: x * 100 + '%', top: y * 100 + '%', width: w * 100 + '%', height: h * 100 + '%' });
+      wrap.appendChild(box);
+    }
+    body.appendChild(wrap);
+    // Bring the figure into view inside the pane.
+    if (block.rect) body.scrollTop = Math.max(0, block.rect[1] * wrap.clientHeight - 16);
   }
 }
 
